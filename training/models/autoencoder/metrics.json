@@ -1,0 +1,28 @@
+{
+  "accuracy": 0.9746192893401016,
+  "precision": 1.0,
+  "recall": 0.8507462686567164,
+  "f1": 0.9193548387096774,
+  "confusion_matrix": [
+    [
+      327,
+      0
+    ],
+    [
+      10,
+      57
+    ]
+  ],
+  "confusion_labels": [
+    "normal",
+    "anomaly"
+  ],
+  "detection_rate_per_event": {
+    "crash": 0.6666666666666666,
+    "rollover": 1.0,
+    "abnormal_temp": 0.7096774193548387
+  },
+  "false_alarm_rate_normal": 0.0,
+  "mode": "autoencoder",
+  "n_test_windows": 394
+}

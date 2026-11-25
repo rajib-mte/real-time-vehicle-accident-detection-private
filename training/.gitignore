@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+# large / personal data (sample_sessions.csv is kept on purpose)
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/sample_sessions.csv
+data/processed/*
+!data/processed/.gitkeep
+# temporary model exports
+/tmp/

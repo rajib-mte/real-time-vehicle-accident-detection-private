@@ -1,0 +1,44 @@
+{
+  "mode": "classifier",
+  "tflite_bytes": 4384,
+  "tflite": {
+    "tensor_dtypes": {
+      "int8": 8,
+      "int32": 3
+    },
+    "ops": [
+      "FULLY_CONNECTED",
+      "SOFTMAX"
+    ],
+    "float32_tensors": [],
+    "input": {
+      "dtype": "int8",
+      "shape": [
+        1,
+        12
+      ],
+      "scale": 0.03758903592824936,
+      "zero_point": -86
+    },
+    "output": {
+      "dtype": "int8",
+      "shape": [
+        1,
+        4
+      ],
+      "scale": 0.00390625,
+      "zero_point": -128
+    },
+    "activation_bytes_sum": 60,
+    "fully_int8": true
+  },
+  "n_test_windows": 394,
+  "float": {
+    "accuracy": 0.9949238578680203
+  },
+  "int8": {
+    "accuracy": 0.9949238578680203
+  },
+  "decision_agreement": 1.0,
+  "tensor_arena_suggestion_bytes": 8192
+}

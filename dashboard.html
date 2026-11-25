@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vehicle Accident Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--bg:#0f1420;--card:#1a2233;--tx:#e6ebf5;--mut:#8b97b0;--ok:#2ecc71;--bad:#ff3b3b;--warn:#f5a623;--ac:#4da3ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,Segoe UI,Roboto,sans-serif;font-size:15px}
+header{padding:12px 16px}
+h1{margin:0;font-size:1.25rem}.sub{color:var(--mut);font-size:.8rem}
+main{padding:0 12px 24px;max-width:1200px;margin:auto}
+section,.card{background:var(--card);border-radius:10px;padding:12px;margin-bottom:12px}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(4,1fr)}
+.grid3{display:grid;gap:12px;grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.grid3{grid-template-columns:1fr}}
+@media(max-width:420px){.grid{grid-template-columns:1fr 1fr}}
+.card{margin:0}.card .l{color:var(--mut);font-size:.72rem;text-transform:uppercase}
+.card .v{font-size:1.35rem;font-weight:600;margin-top:2px;word-break:break-all}
+form{display:grid;gap:8px;grid-template-columns:2fr 1fr 2fr}
+form .row2{grid-column:1/-1;display:grid;gap:8px;grid-template-columns:1fr 1fr 1fr}
+@media(max-width:700px){form,form .row2{grid-template-columns:1fr}}
+label{font-size:.75rem;color:var(--mut);display:block}
+input{width:100%;padding:9px;border-radius:6px;border:1px solid #33405c;background:#0f1420;color:var(--tx);font-size:16px}
+button{padding:9px 14px;border:0;border-radius:6px;background:var(--ac);color:#04101f;font-weight:600;cursor:pointer;font-size:14px;margin:2px}
+button.sec{background:#33405c;color:var(--tx)}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;background:#777;margin-right:6px}
+.dot.on{background:var(--ok)}.dot.wait{background:var(--warn)}.dot.off{background:var(--bad)}
+.badge{display:inline-block;padding:3px 12px;border-radius:99px;font-weight:700;background:var(--ok);color:#04230f}
+.badge.bad{background:var(--bad);color:#fff}.badge.warn{background:var(--warn);color:#2b1a00}
+#banner{display:none;position:sticky;top:0;z-index:50;background:var(--bad);color:#fff;padding:12px 16px;border-bottom:4px solid #fff;animation:bl 1s infinite alternate}
+@keyframes bl{from{background:#c40000}to{background:#ff3b3b}}
+#banner h2{margin:0 0 4px;font-size:1.2rem}#banner a{color:#fff;font-weight:700}
+#banner ul{margin:4px 0;padding-left:20px}
+.cw{position:relative;height:230px}
+#log,#hist{max-height:160px;overflow:auto;font-family:monospace;font-size:.75rem;color:var(--mut);white-space:pre-wrap}
+#hist div{color:var(--tx);padding:2px 0;border-bottom:1px solid #2a3550}
+.chk{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:.85rem}
+.chk input{width:auto}
+.crow{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #2a3550}
+.crow button{padding:4px 10px;background:#7a2a2a;color:#fff}
+.cadd{display:grid;gap:8px;grid-template-columns:2fr 2fr auto;align-items:end}
+@media(max-width:600px){.cadd{grid-template-columns:1fr}}
+.sw{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-weight:700}
+.sw input{position:absolute;opacity:0;width:0;height:0}
+.sw .tr{width:46px;height:26px;border-radius:13px;background:#555;position:relative;transition:background .2s}
+.sw .tr:after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .2s}
+.sw input:checked+.tr{background:var(--ok)}.sw input:checked+.tr:after{left:23px}
+.sw input:focus-visible+.tr{outline:2px solid var(--ac)}
+#bSms{font-weight:700;margin:4px 0}
+.warn-note{color:var(--warn);font-size:.78rem}
+.s-ok{color:var(--ok)}.s-bad{color:var(--bad)}.s-wait{color:var(--warn)}
+#map{height:380px;border-radius:8px;z-index:1}
+@media(max-width:600px){#map{height:300px}}
+.mbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:.85rem}
+.mbar input{width:auto}
+.vmark{font-size:26px;line-height:26px;text-align:center;transition:transform .3s}
+.vmark.nofix{filter:grayscale(1) opacity(.6)}
+.vmark span{display:inline-block}
+.leaflet-container{font-family:inherit}
+</style>
+</head>
+<body>
+<div id="banner" role="alert">
+  <button class="sec" id="dismiss" style="float:right">Dismiss ✕</button>
+  <h2>🚨 <span id="bType">ACCIDENT</span> ALERT <small style="font-weight:400">দুর্ঘটনা সতর্কতা</small></h2>
+  <div id="bMeta"></div><div id="bLoc"></div><div id="bPeak" style="font-weight:700"></div><div id="bSms"></div><ul id="bHosp"></ul>
+</div>
+<header>
+  <h1>Vehicle Accident Detection <span class="sub">— TinyML + Sensor Fusion · রিয়েল-টাইম ড্যাশবোর্ড</span></h1>
+</header>
+<main>
+<section id="cfg">
+  <form id="cfgForm" autocomplete="off">
+    <div><label>Broker URL (ws/wss)</label><input id="url"></div>
+    <div><label>Port</label><input id="port" type="number"></div>
+    <div><label>Topic</label><input id="topic"></div>
+    <div class="row2">
+      <div><label>Username (optional)</label><input id="user"></div>
+      <div><label>Password (optional)</label><input id="pass" type="password"></div>
+      <div><label>Client ID (auto)</label><input id="cid" readonly></div>
+      <div><label>Device ID for config (* = all)</label><input id="devid"></div>
+      <div><label>Shared token (secret)</label><input id="token" type="password"></div>
+    </div>
+    <div class="row2" style="grid-template-columns:auto 1fr;align-items:center">
+      <div><button type="submit" id="bConn">Connect</button><button type="button" class="sec" id="bDisc">Disconnect</button><button type="button" class="sec" id="bSave">Save</button></div>
+      <div><span class="dot off" id="dot"></span><span id="stat">Disconnected</span></div>
+    </div>
+    <div class="row2 chk" style="grid-template-columns:none">
+      <label class="chk"><input type="checkbox" id="demo"> Demo / simulate</label>
+      <label class="chk"><input type="checkbox" id="snd"> Beep</label>
+      <button type="button" class="sec" id="bTest">Publish test alert</button>
+    </div>
+  </form>
+</section>
+
+<section id="contacts">
+  <div class="mbar"><b>Emergency contacts / SMS recipients <span class="sub">জরুরি যোগাযোগ</span></b> <span class="sub" id="cCount">0/10</span></div>
+  <div style="margin:8px 0"><label class="sw"><input type="checkbox" id="smsSw" checked><span class="tr"></span><span>SMS</span></label>
+  <span id="smsStat" class="sub" style="margin-left:8px">SMS: ON (not confirmed)</span></div>
+  <div class="warn-note">⚠ The public broker is open to everyone — set a shared token above (and the same token in the device config) so only you can change recipients.</div>
+  <div class="cadd" style="margin:8px 0">
+    <div><label>Name</label><input id="cName" maxlength="30"></div>
+    <div><label>Phone (01XXXXXXXXX or +country)</label><input id="cPhone" inputmode="tel"></div>
+    <div><button type="button" id="cAdd">Add</button></div>
+  </div>
+  <div id="cErr" class="s-bad sub"></div>
+  <div id="cList"><span class="sub">No contacts.</span></div>
+  <div style="margin-top:8px"><button type="button" id="cSync">Sync to device</button>
+    <span id="cStat" class="sub">Not synced</span></div>
+  <div class="sub">Device reports: <b id="devSync">—</b></div>
+</section>
+
+<section>
+  <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center">
+    <div>Status <span class="badge" id="status">—</span> <span class="sub">(type: <b id="ptype">—</b>)</span></div>
+    <div class="sub">Device: <b id="dev">—</b> · Last update: <b id="last">never</b></div>
+  </div>
+</section>
+
+<div class="grid" style="margin-bottom:12px">
+  <div class="card"><div class="l">Accel X (g)</div><div class="v" id="ax">—</div></div>
+  <div class="card"><div class="l">Accel Y (g)</div><div class="v" id="ay">—</div></div>
+  <div class="card"><div class="l">Accel Z (g)</div><div class="v" id="az">—</div></div>
+  <div class="card"><div class="l">Accel |a| (g)</div><div class="v" id="am">—</div></div>
+  <div class="card"><div class="l">Gyro X (°/s)</div><div class="v" id="gx">—</div></div>
+  <div class="card"><div class="l">Gyro Y (°/s)</div><div class="v" id="gy">—</div></div>
+  <div class="card"><div class="l">Gyro Z (°/s)</div><div class="v" id="gz">—</div></div>
+  <div class="card"><div class="l">Temperature (°C) তাপমাত্রা</div><div class="v" id="temp">—</div></div>
+  <div class="card"><div class="l">Vibration (0–1) কম্পন</div><div class="v" id="vib">—</div></div>
+  <div class="card"><div class="l">Speed (km/h)</div><div class="v" id="spd">—</div></div>
+  <div class="card"><div class="l">Satellites</div><div class="v" id="sats">—</div></div>
+  <div class="card"><div class="l">GPS fix</div><div class="v" id="fix">—</div></div>
+  <div class="card"><div class="l">SMS (device)</div><div class="v" id="smsCard">—</div></div>
+  <div class="card" style="grid-column:span 2"><div class="l">Anomaly score / threshold</div><div class="v"><span id="sc">—</span> / <span id="th">—</span></div></div>
+</div>
+
+<section>
+  <div class="mbar"><b>GPS Map <span class="sub">জিপিএস মানচিত্র</span></b>
+    <label class="chk"><input type="checkbox" id="follow" checked> Auto-follow</label>
+    <button type="button" class="sec" id="clrTrail">Clear trail</button>
+    <span class="sub" id="gpsInfo">No position yet</span></div>
+  <div id="map"></div>
+</section>
+
+<div class="grid3">
+  <section><div class="l sub">Temperature °C</div><div class="cw"><canvas id="cT"></canvas></div></section>
+  <section><div class="l sub">Vibration</div><div class="cw"><canvas id="cV"></canvas></div></section>
+  <section><div class="l sub">Acceleration (g)</div><div class="cw"><canvas id="cA"></canvas></div></section>
+</div>
+
+<div class="grid3" style="grid-template-columns:1fr 1fr">
+  <section><div class="sub">Alert history</div><div id="hist">No alerts.</div></section>
+  <section><div class="sub">Message log</div><div id="log"></div></section>
+</div>
+</main>
+
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+// ===================== CONFIG (defaults) =====================
+const CONFIG = {
+  brokerUrl: "wss://broker.hivemq.com:8884/mqtt", // WebSocket URL of the MQTT broker
+  port: 8884,                                     // merged into the URL if it differs
+  topic: "vehicle/accident",                      // topic to subscribe to
+  username: "", password: "",
+  maxTrail: 500,                                  // max GPS trail points
+  mapCenter: [23.8103, 90.4125],                  // default map view (Dhaka)
+  maxPoints: 120,                                 // rolling chart window
+  demoIntervalMs: 500,
+  storageKey: "accidentDashboardCfg"
+};
+// =============================================================
+const $ = id => document.getElementById(id);
+let demoAlertTs = null, client = null, demoTimer = null, demoTick = 0, demoAccidentAt = 40, audioCtx = null;
+const clientId = "dash_" + Math.random().toString(16).slice(2, 10);
+$("cid").value = clientId;
+
+function loadCfg(){
+  let s = {}; try { s = JSON.parse(localStorage.getItem(CONFIG.storageKey) || "{}"); } catch(e){}
+  const c = Object.assign({}, CONFIG, s);
+  $("url").value = c.brokerUrl; $("port").value = c.port; $("topic").value = c.topic;
+  $("user").value = c.username || ""; $("pass").value = c.password || "";
+  $("devid").value = c.devid || "*"; $("token").value = c.token || "";
+}
+function saveCfg(){
+  try { localStorage.setItem(CONFIG.storageKey, JSON.stringify({brokerUrl:$("url").value.trim(),port:+$("port").value,topic:$("topic").value.trim(),username:$("user").value,password:$("pass").value,devid:$("devid").value.trim(),token:$("token").value})); log("Settings saved."); } catch(e){ log("Cannot save: "+e.message); }
+}
+function buildUrl(){
+  let u = $("url").value.trim(); const p = $("port").value.trim();
+  if (!/^wss?:\/\//i.test(u)) u = "wss://" + u;
+  try {
+    const x = new URL(u);
+    if (p) x.port = p;
+    return x.toString();
+  } catch(e){ return u; }
+}
+function setStat(t, cls){ $("stat").textContent = t; $("dot").className = "dot " + cls; }
+function log(m){ const d = $("log"); d.textContent = ("[" + new Date().toLocaleTimeString() + "] " + m + "\n" + d.textContent).slice(0, 6000); }
+
+// ---------- charts ----------
+function mkChart(id, sets){
+  return new Chart($(id), {type:"line",
+    data:{labels:[],datasets:sets.map(s=>({label:s[0],borderColor:s[1],backgroundColor:s[1],data:[],pointRadius:0,borderWidth:1.5,tension:.2}))},
+    options:{animation:false,responsive:true,maintainAspectRatio:false,
+      scales:{x:{ticks:{color:"#8b97b0",maxTicksLimit:5}},y:{ticks:{color:"#8b97b0"},grid:{color:"#2a3550"}}},
+      plugins:{legend:{labels:{color:"#e6ebf5",boxWidth:10}}}}});
+}
+let cT, cV, cA;
+function initCharts(){
+  if (typeof Chart === "undefined"){ log("Chart.js failed to load (offline?)"); return; }
+  cT = mkChart("cT", [["Temp °C","#ff9f43"]]);
+  cV = mkChart("cV", [["Vibration","#a29bfe"]]);
+  cA = mkChart("cA", [["ax","#ff6b6b"],["ay","#2ecc71"],["az","#4da3ff"],["|a|","#ffffff"]]);
+}
+function push(ch, label, vals){
+  if (!ch) return;
+  ch.data.labels.push(label);
+  vals.forEach((v,i)=>ch.data.datasets[i].data.push(v));
+  while (ch.data.labels.length > CONFIG.maxPoints){ ch.data.labels.shift(); ch.data.datasets.forEach(d=>d.data.shift()); }
+  ch.update("none");
+}
+
+// ---------- message handling ----------
+const num = v => { const n = typeof v === "string" ? parseFloat(v) : v; return typeof n === "number" && isFinite(n) ? n : null; };
+const pick = (o, ...k) => { for (const x of k) if (o[x] !== undefined && o[x] !== null) return o[x]; return undefined; };
+const fmt = (v, d=2) => v === null || v === undefined ? "—" : Number(v).toFixed(d);
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function handle(raw){
+  let o;
+  try { o = JSON.parse(raw); } catch(e){ log("Non-JSON: " + raw.slice(0,200)); return; }
+  if (!o || typeof o !== "object" || Array.isArray(o)){ log("Unexpected JSON: " + raw.slice(0,200)); return; }
+  if (String(o.type).toLowerCase() === "sms_report"){ applySmsReport(o); return; }
+  const ax = num(pick(o,"ax","accel_x")), ay = num(pick(o,"ay","accel_y")), az = num(pick(o,"az","accel_z"));
+  const gx = num(pick(o,"gx","gyro_x")), gy = num(pick(o,"gy","gyro_y")), gz = num(pick(o,"gz","gyro_z"));
+  const temp = num(pick(o,"temp_c","temperature","temp"));
+  const vib = num(pick(o,"vibration","vib"));
+  const sc = num(pick(o,"anomaly_score","score")), th = num(pick(o,"threshold"));
+  const am = (ax!==null&&ay!==null&&az!==null) ? Math.sqrt(ax*ax+ay*ay+az*az) : null;
+  const type = String(pick(o,"type") || "telemetry").toLowerCase();
+  const status = String(pick(o,"status") || (type==="alert" ? "accident" : "normal")).toLowerCase();
+  let t = num(pick(o,"ts","timestamp","time")); let d = t===null ? new Date() : new Date(t < 1e11 ? t*1000 : t);
+  if (isNaN(d)) d = new Date();
+  const lbl = d.toLocaleTimeString();
+  const set = (id, v, dg) => { if (v !== null) $(id).textContent = fmt(v, dg); };
+  set("ax",ax);set("ay",ay);set("az",az);set("am",am);set("gx",gx,1);set("gy",gy,1);set("gz",gz,1);
+  set("temp",temp,1);set("vib",vib);set("sc",sc,3);set("th",th,3);
+  if (o.device_id !== undefined) $("dev").textContent = o.device_id;
+  $("ptype").textContent = type; $("last").textContent = new Date().toLocaleTimeString();
+  const b = $("status"); b.textContent = status.toUpperCase();
+  b.className = "badge" + (status==="normal" ? "" : status==="over_temp" ? " warn" : " bad");
+  if (temp!==null) push(cT, lbl, [temp]);
+  if (vib!==null) push(cV, lbl, [vib]);
+  if (am!==null) push(cA, lbl, [ax,ay,az,am]);
+  const spd = num(pick(o,"speed_kmh","speed")), sats = num(pick(o,"sats","satellites"));
+  const fixRaw = pick(o,"gps_fix","fix");
+  const lat = num(o.lat), lon = num(o.lon);
+  const hasPos = lat!==null && lon!==null && !(lat===0 && lon===0);
+  const fix = fixRaw===undefined ? hasPos : (fixRaw===true || fixRaw===1 || fixRaw==="1" || String(fixRaw).toLowerCase()==="true");
+  set("spd",spd,1); if (sats!==null) $("sats").textContent = sats;
+  if (fixRaw!==undefined || hasPos){ $("fix").textContent = fix ? "FIX ✓" : "NO FIX"; $("fix").style.color = fix ? "var(--ok)" : "var(--bad)"; }
+  if (hasPos) updateMap({lat,lon,fix,spd,sats,hd:num(pick(o,"heading_deg","heading")),alt:num(o.alt_m),hdop:num(o.hdop),d});
+  if (typeof o.sms_enabled === "boolean"){ smsConfirmed = o.sms_enabled; if (smsPending && smsConfirmed === smsDesired) smsPending = false; renderSms(); }
+  const cv = num(o.contacts_version), cc = num(o.contacts_count);
+  if (cv!==null || cc!==null) devContacts = {v:cv, n:cc}, renderDevSync();
+  if (status !== "normal" || type === "alert") alertShow(o, type, status, d, hasPos ? [lat,lon] : null);
+}
+
+// ---------- map ----------
+let map = null, vMarker = null, trail = null, trailPts = [], alertLayer = null, hospLayer = null, lastGps = null;
+function initMap(){
+  if (typeof L === "undefined"){ $("gpsInfo").textContent = "Leaflet failed to load (offline?)"; return; }
+  map = L.map("map").setView(CONFIG.mapCenter, 13);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'}).addTo(map);
+  trail = L.polyline([], {color:"#4da3ff", weight:4, opacity:.8}).addTo(map);
+  alertLayer = L.layerGroup().addTo(map); hospLayer = L.layerGroup().addTo(map);
+  window.addEventListener("resize", () => map.invalidateSize());
+  window.addEventListener("orientationchange", () => setTimeout(() => map.invalidateSize(), 300));
+  setTimeout(() => map.invalidateSize(), 300);
+}
+function vIcon(hd, fix){
+  return L.divIcon({className:"", iconSize:[28,28], iconAnchor:[14,14],
+    html:'<div class="vmark'+(fix?"":" nofix")+'"><span style="transform:rotate('+(hd===null?0:hd)+'deg)">'+(hd===null?"🚗":"▲")+'</span></div>'});
+}
+function popupHtml(g){
+  return "<b>Vehicle</b>" + (g.fix ? "" : " <i>(last known)</i>") + "<br>Speed: " + fmt(g.spd,1) + " km/h<br>Sats: " + (g.sats===null?"—":g.sats) +
+    "<br>GPS fix: " + (g.fix ? "yes" : "no") + (g.hd!==null ? "<br>Heading: " + Math.round(g.hd) + "°" : "") + (g.alt!==null ? "<br>Alt: " + fmt(g.alt,0) + " m" : "") +
+    (g.hdop!==null ? "<br>HDOP: " + fmt(g.hdop,1) : "") + "<br>Updated: " + g.d.toLocaleTimeString();
+}
+function updateMap(g){
+  $("gpsInfo").textContent = (g.fix ? "" : "Last known · ") + g.lat.toFixed(5) + ", " + g.lon.toFixed(5);
+  if (!map) return;
+  if (!g.fix && lastGps){ g.lat = lastGps.lat; g.lon = lastGps.lon; }   // grey out at last known position
+  const ll = [g.lat, g.lon];
+  if (!vMarker) vMarker = L.marker(ll, {icon:vIcon(g.hd, g.fix)}).addTo(map).bindPopup("");
+  else { vMarker.setLatLng(ll); vMarker.setIcon(vIcon(g.hd, g.fix)); }
+  vMarker.setPopupContent(popupHtml(g));
+  if (g.fix){
+    lastGps = g;
+    const last = trailPts[trailPts.length-1];
+    if (!last || last[0]!==g.lat || last[1]!==g.lon){
+      trailPts.push(ll); if (trailPts.length > CONFIG.maxTrail) trailPts.shift();
+      trail.setLatLngs(trailPts);
+    }
+    if ($("follow").checked) map.panTo(ll, {animate:false});
+  }
+}
+$("clrTrail").onclick = () => { trailPts = []; if (trail) trail.setLatLngs([]); };
+function mapAlert(pos, label, d, hs){
+  if (!map) return;
+  const m = L.circleMarker(pos, {radius:11, color:"#fff", weight:2, fillColor:"#ff3b3b", fillOpacity:1}).addTo(alertLayer);
+  m.bindPopup("<b>🚨 " + esc(label) + "</b><br>" + d.toLocaleString()).openPopup();
+  hospLayer.clearLayers();
+  hs.forEach(h => { const a = num(h && h.lat), b = num(h && h.lon); if (a===null || b===null) return;
+    L.marker([a,b], {icon:L.divIcon({className:"", iconSize:[24,24], iconAnchor:[12,12], html:'<div class="vmark" style="font-size:20px">🏥</div>'})})
+      .addTo(hospLayer).bindPopup(esc(h.name || "Hospital") + (num(h.distance_km)!==null ? "<br>" + Number(h.distance_km).toFixed(1) + " km" : "") + (h.phone ? '<br><a href="tel:'+esc(String(h.phone).replace(/[^\d+]/g,""))+'">'+esc(h.phone)+"</a>" : "")); });
+  if ($("follow").checked) map.setView(pos, Math.max(map.getZoom(), 14));
+}
+
+// ---------- alerts ----------
+function beep(){
+  if (!$("snd").checked) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    for (let i=0;i<3;i++){ const os = audioCtx.createOscillator(), g = audioCtx.createGain();
+      os.frequency.value = 880; os.connect(g); g.connect(audioCtx.destination); g.gain.value = .15;
+      os.start(audioCtx.currentTime + i*.3); os.stop(audioCtx.currentTime + i*.3 + .18); }
+  } catch(e){}
+}
+let lastAlertAt = 0, curAlert = null;
+// ---- SMS info for alerts ----
+const bool = v => v === undefined || v === null ? null : (v === true || v === 1 || String(v).toLowerCase() === "true");
+function smsInfo(o){ return {enabled:bool(o.sms_enabled), skipped:bool(o.sms_skipped), sent:num(o.sms_sent), failed:num(o.sms_failed), peak:num(o.peak_g), ai:bool(o.ai_detected)}; }
+function peakText(i){ const t = []; if (i.peak !== null && i.peak !== undefined) t.push("Peak: " + i.peak.toFixed(1) + " g"); if (i.ai !== null && i.ai !== undefined) t.push("AI: " + (i.ai ? "YES" : "NO")); return t.join(" · "); }
+function smsText(i){
+  if (i.skipped === true || i.enabled === false) return "📵 SMS off — no texts sent";
+  if (i.sent !== null || i.failed !== null) return "📱 SMS: " + (i.sent ?? 0) + " sent, " + (i.failed ?? 0) + " failed" + ((i.failed ?? 0) > 0 ? " ⚠" : "");
+  return "📱 SMS: sending… (awaiting report)";
+}
+function renderAlertRow(r){ r.row.textContent = r.d.toLocaleString() + " · " + r.label + r.loc + (peakText(r.info) ? " · " + peakText(r.info) : "") + " · " + smsText(r.info).replace(/^\S+\s/, ""); }
+function applySmsReport(o){
+  const rep = {enabled:null, skipped:null, sent:num(o.sms_sent), failed:num(o.sms_failed)};
+  log("SMS report: sent " + rep.sent + ", failed " + rep.failed);
+  if (!curAlert) return;
+  if (o.alert_ts !== undefined && curAlert.ts !== undefined && String(o.alert_ts) !== String(curAlert.ts)) log("SMS report alert_ts differs from latest alert; applied to latest.");
+  curAlert.info = Object.assign({}, curAlert.info, {sent:rep.sent, failed:rep.failed}); renderAlertRow(curAlert);
+  $("bSms").textContent = smsText(curAlert.info);
+}
+function alertShow(o, type, status, d, pos){
+  const label = (status !== "normal" ? status : type).toUpperCase();
+  $("bType").textContent = label;
+  $("bMeta").textContent = "Time: " + d.toLocaleString() + (o.device_id ? " · Device: " + o.device_id : "");
+  const lat = num(o.lat), lon = num(o.lon);
+  $("bLoc").innerHTML = (lat!==null && lon!==null)
+    ? 'Location: <a target="_blank" rel="noopener" href="https://www.google.com/maps?q='+lat+','+lon+'">'+lat.toFixed(5)+', '+lon.toFixed(5)+' (open map)</a>'
+    : "Location: unknown";
+  const hs = Array.isArray(o.hospitals) ? o.hospitals : [];
+  $("bHosp").innerHTML = hs.map(h => {
+    const ph = h && h.phone ? String(h.phone).replace(/[^\d+]/g,"") : "";
+    const dist = num(h && h.distance_km);
+    return "<li>" + esc(h && h.name || "Hospital") + (dist!==null ? " — " + dist.toFixed(1) + " km" : "") +
+      (ph ? ' — <a href="tel:'+ph+'">'+esc(h.phone)+"</a>" : "") + "</li>";
+  }).join("");
+  $("banner").style.display = "block";
+  const info = smsInfo(o);
+  $("bSms").textContent = smsText(info); $("bPeak").textContent = peakText(info);
+  const mp = pos || (lastGps ? [lastGps.lat, lastGps.lon] : null);
+  if (mp && Date.now() - lastAlertAt > 5000) mapAlert(mp, label, d, hs);
+  const now = Date.now();
+  if (now - lastAlertAt > 5000){
+    lastAlertAt = now; beep();
+    if (navigator.vibrate) try { navigator.vibrate([300,150,300,150,600]); } catch(e){}
+    const h = $("hist"); if (h.textContent === "No alerts.") h.textContent = "";
+    const row = document.createElement("div");
+    h.insertBefore(row, h.firstChild);
+    curAlert = {ts: o.ts, row, d, label, loc: (lat!==null ? " · " + lat.toFixed(4) + "," + lon.toFixed(4) : ""), info};
+    renderAlertRow(curAlert);
+  } else if (curAlert && (info.sent!==null || info.failed!==null || info.skipped!==null || info.enabled!==null)){
+    curAlert.info = Object.assign({}, curAlert.info, Object.fromEntries(Object.entries(info).filter(e => e[1] !== null))); renderAlertRow(curAlert);
+    $("bSms").textContent = smsText(curAlert.info); $("bPeak").textContent = peakText(curAlert.info);
+  }
+}
+$("dismiss").onclick = () => { $("banner").style.display = "none"; };
+
+// ---------- MQTT ----------
+function connect(){
+  if (typeof mqtt === "undefined"){ setStat("MQTT.js not loaded (offline?)", "off"); return; }
+  disconnect(true);
+  const url = buildUrl(), topic = $("topic").value.trim() || CONFIG.topic;
+  setStat("Connecting…", "wait"); log("Connecting " + url);
+  const opts = {clientId, clean:true, reconnectPeriod:3000, connectTimeout:10000};
+  if ($("user").value) { opts.username = $("user").value; opts.password = $("pass").value; }
+  try { client = mqtt.connect(url, opts); } catch(e){ setStat("Error: "+e.message, "off"); return; }
+  client.on("connect", () => {
+    setStat("Connected · " + topic, "on");
+    client.subscribe(topic, {qos:0}, err => log(err ? "Subscribe failed: "+err.message : "Subscribed to " + topic));
+    client.subscribe(ackTopic(), {qos:1});
+    client.subscribe(smsAckTopic(), {qos:1});
+    if (contacts.length && lastSyncVersion === 0) syncContacts(true);
+  });
+  client.on("reconnect", () => setStat("Reconnecting…", "wait"));
+  client.on("close", () => { if (client) setStat("Disconnected / retrying", "off"); });
+  client.on("error", e => { setStat("Error: " + e.message, "off"); log("Error: " + e.message); });
+  client.on("message", (t, m) => { if (t === ackTopic()) handleAck(m.toString()); else if (t === smsAckTopic()) handleSmsAck(m.toString()); else handle(m.toString()); });
+}
+function disconnect(silent){
+  if (client){ const c = client; client = null; try { c.end(true); } catch(e){} }
+  if (!silent) setStat("Disconnected", "off");
+}
+const samplePayload = () => ({type:"alert",device_id:"dashboard-test",ts:Date.now(),ax:-3.8,ay:2.1,az:0.4,gx:210,gy:-90,gz:40,temp_c:36.5,vibration:0.92,anomaly_score:0.31,threshold:0.12,status:"accident",lat:23.8103,lon:90.4125,hospitals:[{name:"Dhaka Medical College Hospital",distance_km:2.4,phone:"+8802-55165088",lat:23.7262,lon:90.3972},{name:"Square Hospital",distance_km:3.1,phone:"+88010616",lat:23.7529,lon:90.3814}]});
+$("bTest").onclick = () => {
+  const p = samplePayload();
+  if (client && client.connected){ client.publish($("topic").value.trim() || CONFIG.topic, JSON.stringify(p)); log("Published test alert."); }
+  else { log("Not connected; showing test alert locally."); handle(JSON.stringify(p)); }
+};
+$("cfgForm").addEventListener("submit", e => { e.preventDefault(); saveCfg(); connect(); });
+$("bDisc").onclick = () => disconnect();
+$("bSave").onclick = saveCfg;
+$("url").addEventListener("change", () => { try { const p = new URL(buildUrl()).port; if (p) $("port").value = p; } catch(e){} });
+
+// ---------- emergency contacts ----------
+const MAX_CONTACTS = 10, CKEY = "accidentDashboardContacts";
+let contacts = [], lastSyncVersion = 0, devContacts = null, syncTimer = null;
+try { contacts = JSON.parse(localStorage.getItem(CKEY) || "[]").filter(c => c && c.phone).slice(0, MAX_CONTACTS); } catch(e){}
+const baseTopic = () => ($("topic").value.trim() || CONFIG.topic).replace(/\/+$/, "");
+const cfgTopic = () => baseTopic() + "/config/contacts";
+const ackTopic = () => cfgTopic() + "/ack";
+function normPhone(raw){
+  let p = String(raw).replace(/[\s\-().]/g, "");
+  if (/^00/.test(p)) p = "+" + p.slice(2);
+  if (/^01\d{9}$/.test(p)) return "+880" + p.slice(1);
+  if (/^8801\d{9}$/.test(p)) return "+" + p;
+  if (/^\+8801\d{9}$/.test(p)) return p;
+  if (/^\+\d{8,15}$/.test(p) && !/^\+880/.test(p)) return p;
+  return null;
+}
+function saveContacts(){ try { localStorage.setItem(CKEY, JSON.stringify(contacts)); } catch(e){} }
+function renderContacts(){
+  $("cCount").textContent = contacts.length + "/" + MAX_CONTACTS;
+  const l = $("cList"); l.innerHTML = "";
+  if (!contacts.length){ l.innerHTML = '<span class="sub">No contacts.</span>'; return; }
+  contacts.forEach((c, i) => {
+    const r = document.createElement("div"); r.className = "crow";
+    r.innerHTML = "<span><b>" + esc(c.name) + "</b> · " + esc(c.phone) + "</span>";
+    const b = document.createElement("button"); b.type = "button"; b.textContent = "Remove";
+    b.onclick = () => { contacts.splice(i, 1); contactsChanged(); };
+    r.appendChild(b); l.appendChild(r);
+  });
+}
+function contactsChanged(){
+  saveContacts(); renderContacts(); renderDevSync();
+  setCStat("Changed — not synced", "s-wait");
+  clearTimeout(syncTimer);
+  if (client && client.connected) syncTimer = setTimeout(() => syncContacts(true), 600);
+}
+function setCStat(t, cls){ const e = $("cStat"); e.textContent = t; e.className = "sub " + (cls || ""); }
+$("cAdd").onclick = () => {
+  const name = $("cName").value.trim(), ph = normPhone($("cPhone").value), err = $("cErr");
+  err.textContent = "";
+  if (!name) { err.textContent = "Enter a name."; return; }
+  if (!ph) { err.textContent = "Invalid phone. Use 01XXXXXXXXX (Bangladesh) or +<country><number>."; return; }
+  if (contacts.length >= MAX_CONTACTS) { err.textContent = "Maximum " + MAX_CONTACTS + " contacts."; return; }
+  if (contacts.some(c => c.phone === ph)) { err.textContent = "Duplicate number."; return; }
+  contacts.push({name, phone: ph}); $("cName").value = ""; $("cPhone").value = "";
+  contactsChanged();
+};
+function syncContacts(auto){
+  if (!client || !client.connected){ setCStat("Connect to the broker first", "s-bad"); return; }
+  if (!$("token").value && !auto) log("Warning: no token set; the public broker is open.");
+  const v = Date.now();
+  const payload = {type:"contacts", device_id:$("devid").value.trim() || "*", version:v, token:$("token").value, contacts:contacts.map(c => ({name:c.name, phone:c.phone}))};
+  lastSyncVersion = v;
+  setCStat("Pending… (v" + v + ")", "s-wait");
+  client.publish(cfgTopic(), JSON.stringify(payload), {qos:1, retain:true}, err => {
+    if (err){ setCStat("Error: " + err.message, "s-bad"); } else log("Contacts published (retained) to " + cfgTopic());
+  });
+  renderDevSync();
+}
+function handleAck(raw){
+  let a; try { a = JSON.parse(raw); } catch(e){ log("Non-JSON ack: " + raw.slice(0,100)); return; }
+  if (!a || typeof a !== "object") return;
+  const v = num(a.version), ok = a.ok !== false && a.status !== "error" && !a.error;
+  if (v !== null && lastSyncVersion && v !== lastSyncVersion){ log("Ack for older version " + v); return; }
+  const cnt = num(a.count !== undefined ? a.count : a.contacts_count);
+  if (ok){ if (v !== null) lastSyncVersion = v; setCStat("Synced " + (cnt !== null ? cnt : contacts.length) + " contacts at " + new Date().toLocaleTimeString(), "s-ok"); }
+  else setCStat("Error: " + (a.error || a.message || "device rejected"), "s-bad");
+  if (ok && v !== null) devContacts = {v, n:cnt}; renderDevSync();
+}
+function renderDevSync(){
+  const e = $("devSync");
+  if (!devContacts){ e.textContent = "—"; e.className = ""; return; }
+  const inSync = devContacts.v !== null ? (devContacts.v === lastSyncVersion && lastSyncVersion !== 0 && (devContacts.n === null || devContacts.n === contacts.length))
+                                        : devContacts.n === contacts.length;
+  e.textContent = (inSync ? "IN SYNC" : "OUT OF SYNC") + " (device v" + (devContacts.v ?? "?") + ", " + (devContacts.n ?? "?") + " contacts)";
+  e.className = inSync ? "s-ok" : "s-bad";
+}
+$("cSync").onclick = () => syncContacts(false);
+$("topic").addEventListener("change", () => { lastSyncVersion = 0; });
+
+// ---------- SMS on/off ----------
+const SKEY = "accidentDashboardSms";
+let smsDesired = localStorage.getItem(SKEY) !== "false", smsConfirmed = null, smsPending = false, lastSmsVersion = 0, smsErr = "";
+const smsTopic = () => baseTopic() + "/config/sms";
+const smsAckTopic = () => smsTopic() + "/ack";
+function renderSms(){
+  $("smsSw").checked = smsDesired;
+  const want = smsDesired ? "ON" : "OFF", e = $("smsStat");
+  let t, cls = "";
+  if (smsErr){ t = "SMS: " + want + " — error: " + smsErr; cls = "s-bad"; }
+  else if (smsPending){ t = "SMS: " + want + " (pending…)"; cls = "s-wait"; }
+  else if (smsConfirmed === null){ t = "SMS: " + want + " (not confirmed)"; }
+  else if (smsConfirmed === smsDesired){ t = "SMS: " + want + " (device confirmed)"; cls = "s-ok"; }
+  else { t = "⚠ SMS mismatch: desired " + want + ", device " + (smsConfirmed ? "ON" : "OFF"); cls = "s-bad"; }
+  e.textContent = t; e.className = "sub " + cls;
+  if (smsConfirmed !== null){ $("smsCard").textContent = smsConfirmed ? "ON" : "OFF"; $("smsCard").style.color = smsConfirmed ? "var(--ok)" : "var(--warn)"; }
+}
+function publishSms(){
+  if (!client || !client.connected){ smsPending = false; smsErr = "not connected — will not reach device"; renderSms(); return; }
+  const v = Date.now(); lastSmsVersion = v; smsPending = true; smsErr = "";
+  const p = {type:"sms_config", device_id:$("devid").value.trim() || "*", version:v, token:$("token").value, sms_enabled:smsDesired};
+  client.publish(smsTopic(), JSON.stringify(p), {qos:1, retain:true}, err => { if (err){ smsPending = false; smsErr = err.message; renderSms(); } else log("SMS config published (retained): " + (smsDesired ? "ON" : "OFF")); });
+  renderSms();
+}
+$("smsSw").onchange = e => { smsDesired = e.target.checked; try { localStorage.setItem(SKEY, String(smsDesired)); } catch(x){} smsErr = ""; publishSms(); };
+function handleSmsAck(raw){
+  let a; try { a = JSON.parse(raw); } catch(e){ log("Non-JSON sms ack"); return; }
+  if (!a || typeof a !== "object") return;
+  const v = num(a.version);
+  if (v !== null && lastSmsVersion && v !== lastSmsVersion){ log("SMS ack for older version " + v); return; }
+  if (a.ok === false){ smsPending = false; smsErr = a.error || "device rejected"; }
+  else { smsErr = ""; smsPending = false; if (typeof a.sms_enabled === "boolean") smsConfirmed = a.sms_enabled; }
+  renderSms();
+}
+// ---------- demo ----------
+const DEMO_ROUTE = [[23.8103,90.4125],[23.7940,90.4043],[23.7808,90.4167],[23.7731,90.3995],[23.7465,90.3760],[23.7380,90.3830],[23.7561,90.3872],[23.7806,90.3990],[23.7950,90.4150],[23.8103,90.4125]];
+function demoPos(t){ // position along the closed route, 0.04 segment per tick
+  const k = (t*0.04) % (DEMO_ROUTE.length-1), i = Math.floor(k), f = k - i, a = DEMO_ROUTE[i], b = DEMO_ROUTE[i+1];
+  const lat = a[0]+(b[0]-a[0])*f, lon = a[1]+(b[1]-a[1])*f;
+  const hd = (Math.atan2((b[1]-a[1])*Math.cos(lat*Math.PI/180), b[0]-a[0])*180/Math.PI + 360) % 360;
+  return {lat, lon, hd};
+}
+function demoStep(){
+  demoTick++;
+  const acc = demoTick >= demoAccidentAt && demoTick < demoAccidentAt + 6;
+  const n = s => (Math.random()-.5)*s;
+  const p = {type:acc?"alert":"telemetry",device_id:"demo-esp32s3",ts:Date.now(),
+    ax:n(.2)+(acc?(Math.random()>.5?4:-4):0),ay:n(.2)+(acc?n(5):0),az:1+n(.1),
+    gx:n(6)+(acc?n(400):0),gy:n(6),gz:n(6),temp_c:31+Math.sin(demoTick/20)*1.5+n(.3),
+    vibration:Math.max(0,Math.min(1,.12+n(.1)+(acc?.7:0))),anomaly_score:acc?.35:.02+Math.random()*.03,threshold:.12,
+    status:acc?(demoTick%2?"accident":"rollover"):"normal"};
+  const dp = demoPos(demoTick), nofix = demoTick % 90 >= 70 && demoTick % 90 < 78;
+  p.lat = dp.lat; p.lon = dp.lon; p.heading_deg = dp.hd; p.gps_fix = !nofix; p.sats = nofix ? 2 : 8 + Math.floor(Math.random()*4);
+  p.speed_kmh = acc ? 4 : 28 + n(8); p.alt_m = 8 + n(2); p.hdop = 0.9 + Math.random()*.4;
+  p.sms_enabled = smsDesired;
+  if (acc){ p.peak_g = 4.5 + Math.random()*3; p.ai_detected = Math.random() > .25; p.hospitals = samplePayload().hospitals; if (demoTick === demoAccidentAt) demoAlertTs = p.ts; if (!smsDesired) p.sms_skipped = true; }
+  const sendReport = demoTick === demoAccidentAt + 6;
+  if (sendReport) demoAccidentAt = demoTick + 60 + Math.floor(Math.random()*40);
+  handle(JSON.stringify(p));
+  if (sendReport) handle(JSON.stringify({type:"sms_report", device_id:"demo-esp32s3", alert_ts:demoAlertTs, sms_sent:smsDesired ? contacts.length : 0, sms_failed:smsDesired && contacts.length > 2 ? 1 : 0}));
+}
+$("demo").onchange = e => {
+  clearInterval(demoTimer);
+  if (e.target.checked){ demoTick = 0; demoAccidentAt = 40; demoTimer = setInterval(demoStep, CONFIG.demoIntervalMs); log("Demo started."); }
+  else log("Demo stopped.");
+};
+window.addEventListener("pointerdown", () => { if (audioCtx && audioCtx.state==="suspended") audioCtx.resume(); }, {once:true});
+
+loadCfg(); initCharts(); initMap(); renderContacts(); renderSms();
+window.__dash = {handle, demoStep, getMap:()=>map, sms:()=>smsDesired, contacts:()=>contacts};
+</script>
+</body>
+</html>

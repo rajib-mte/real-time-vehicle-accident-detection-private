@@ -1,0 +1,57 @@
+{
+  "mode": "autoencoder",
+  "tflite_bytes": 4632,
+  "tflite": {
+    "tensor_dtypes": {
+      "int8": 9,
+      "int32": 4
+    },
+    "ops": [
+      "FULLY_CONNECTED"
+    ],
+    "float32_tensors": [],
+    "input": {
+      "dtype": "int8",
+      "shape": [
+        1,
+        12
+      ],
+      "scale": 0.04865536093711853,
+      "zero_point": -37
+    },
+    "output": {
+      "dtype": "int8",
+      "shape": [
+        1,
+        12
+      ],
+      "scale": 0.07280050218105316,
+      "zero_point": -72
+    },
+    "activation_bytes_sum": 62,
+    "fully_int8": true
+  },
+  "n_test_windows": 394,
+  "float": {
+    "accuracy": 0.9746192893401016,
+    "precision": 1.0,
+    "recall": 0.8507462686567164,
+    "f1": 0.9193548387096774
+  },
+  "int8": {
+    "accuracy": 0.9771573604060914,
+    "precision": 1.0,
+    "recall": 0.8656716417910447,
+    "f1": 0.928
+  },
+  "int8_with_float_threshold": {
+    "accuracy": 0.9771573604060914,
+    "precision": 1.0,
+    "recall": 0.8656716417910447,
+    "f1": 0.928
+  },
+  "threshold_float": 0.45831361413002014,
+  "threshold_int8": 0.44408664107322693,
+  "decision_agreement": 0.9974619289340102,
+  "tensor_arena_suggestion_bytes": 8192
+}
